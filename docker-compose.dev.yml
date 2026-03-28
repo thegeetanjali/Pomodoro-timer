@@ -1,0 +1,32 @@
+version: "3.9"
+
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  backend:
+    build:
+      target: deps          # stop at deps stage — mount source live
+    command: npx nodemon src/server.js
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./backend/src:/app/src:ro
+    ports:
+      - "5000:5000"         # expose for direct API testing
+
+  mongo:
+    ports:
+      - "27017:27017"       # expose for MongoDB Compass / local tools
+
+  frontend:
+    # In dev, run CRA dev server instead of Nginx
+    build:
+      context: .
+      target: builder
+    command: npm start
+    environment:
+      REACT_APP_API_URL: http://localhost:5000/api
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./src:/app/src:ro
+    ports:
+      - "3000:3000"

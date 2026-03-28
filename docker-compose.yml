@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  # ── MongoDB ──────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7-jammy
+    container_name: pomodoro_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: pomodoro
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - pomodoro_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (Express) ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pomodoro_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/pomodoro
+      JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
+      JWT_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - pomodoro_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend (React + Nginx) ─────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: /api
+    container_name: pomodoro_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - pomodoro_net
+
+volumes:
+  mongo_data:
+    driver: local
+
+networks:
+  pomodoro_net:
+    driver: bridge
